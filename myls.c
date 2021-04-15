@@ -1,3 +1,7 @@
+
+You sent დღეს, 10:34-ზე
+date ar undoda ase rogorcaa
+You sent დღეს, 10:36-ზე
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,31 +11,52 @@
 #include <dirent.h>
 #include <pwd.h>
 #include <grp.h>
+#include <stdbool.h>
 
-#define ERR(x) fprintf(stderr, "%s", x); \
+#define ERR(x)                \
+    fprintf(stderr, "%s", x); \
     exit(EXIT_FAILURE); // Error log macro definition
+
+#define I_OPT 1
+#define L_OPT 2
+#define R_OPT 4
+
+#define MAX_DIRECTORY_CHARS 1000
+
+static int stringComparer(const void *a, const void *b)
+{
+    return strcmp((const char *)a, (const char *)b);
+}
 
 typedef unsigned long UL;
 
 struct file_list
 {
-    char ** flist;
+    char *directory;
+    char **flist;
     int size;
 };
 
-struct file_list readTheWholeDir(const char * path)
+struct options
 {
-    struct dirent * dir_data = NULL;
+    int opt;
+};
 
-    DIR * dir;
+struct file_list readTheWholeDir(const char *path)
+{
+    struct dirent *dir_data = NULL;
+
+    DIR *dir;
     dir = opendir(path);
 
-    char ** fList;
+    char **fList = NULL;
 
     int size = 0;
 
     while ((dir_data = readdir(dir)) != NULL)
     {
+        if (strcmp(dir_data->d_name, "..") == 0 || strcmp(dir_data->d_name, ".") == 0)
+            continue;
         if (size == 0)
         {
             if ((fList = (char **)malloc(sizeof(char *))) == NULL)
@@ -44,11 +69,15 @@ struct file_list readTheWholeDir(const char * path)
                 ERR("\nCould not allocate memory on the heap");
             }
 
-            strcpy(fList[0], dir_data->d_name);
+            if (strcmp(dir_data->d_name, "..") != 0 && strcmp(dir_data->d_name, ".") != 0) // if directory doesnt match the parent directory go through it
+            {
+                strcpy(fList[0], dir_data->d_name);
+            }
 
-            size ++;
+            // sprintf(fList[0], "%s/%s", path, dir_data->d_name);
+
+            size++;
         }
-
         else
         {
             if ((fList = (char **)realloc(fList, (sizeof(char *) * (size + 1)))) == NULL)
@@ -63,7 +92,7 @@ struct file_list readTheWholeDir(const char * path)
 
             strcpy(fList[size], dir_data->d_name);
 
-            size ++;
+            size++;
         }
     }
 
@@ -74,12 +103,23 @@ struct file_list readTheWholeDir(const char * path)
     fl.flist = fList;
     fl.size = size;
 
+    char directory[MAX_DIRECTORY_CHARS];
+    strcpy(directory, path);
+
+    if (path[strlen(path) - 1] != '/' && path[strlen(path) - 1] != '\\')
+    {
+        strcat(directory, "/");
+    }
+
+    fl.directory = (char *)malloc(strlen(directory) + 1);
+    strcpy(fl.directory, directory);
+
     return fl;
 }
 
 void printGroupName(gid_t grpNum) // this function prints the group name refered to grpNum
 {
-    struct group * grp = getgrgid(grpNum);
+    struct group *grp = getgrgid(grpNum);
 
     if (grp) // error check
     {
@@ -94,7 +134,7 @@ void printGroupName(gid_t grpNum) // this function prints the group name refered
 
 void printUserName(uid_t uid) // this function prints the user name refered to uid
 {
-    struct passwd * pw = getpwuid(uid);
+    struct passwd *pw = getpwuid(uid);
 
     if (pw) //error check
     {
@@ -107,33 +147,35 @@ void printUserName(uid_t uid) // this function prints the user name refered to u
     }
 }
 
-void printIndexNum(const char * file) // this function prints the inode number of the given file
+void printIndexNum(const char *file) // this function prints the inode number of the given file
 {
-    struct stat * buf = (struct stat *)malloc(sizeof (struct stat)); // allocate memory for the stat buffer
-    memset(buf, 0, sizeof (struct stat)); // clear data fields inside a buffer
+    struct stat *buf = (struct stat *)malloc(sizeof(struct stat)); // allocate memory for the stat buffer
+    memset(buf, 0, sizeof(struct stat));                           // clear data fields inside a buffer
 
     if (stat(file, buf) == -1) // error check
     {
         ERR("Error caught when calling the stat function!");
     }
 
-    printf("%d %s", (int)buf->st_ino, file); // print inode number
+    printf("%d ", (int)buf->st_ino); // print inode number
 
     free(buf); // deallocate memory
 }
 
-void printLongListing(const char * file) // this function prints the long listed format
+void printLongListing(const char *file) // this function prints the long listed format
 {
-    struct stat * buf = (struct stat *)malloc(sizeof (struct stat));
-    memset(buf, 0, sizeof (struct stat));
+    struct stat *buf = (struct stat *)malloc(sizeof(struct stat));
+    memset(buf, 0, sizeof(struct stat));
 
     if (stat(file, buf) == -1) // error check
     {
-        ERR("Error caught when calling the stat function!");
+        char errorText[MAX_DIRECTORY_CHARS + 100];
+        snprintf(errorText, sizeof(errorText), "Error caught when calling the stat function on file %s!\n\n", file);
+        ERR(errorText);
     }
 
-    int flags[9] = { S_IRUSR, S_IWUSR, S_IXUSR, S_IRGRP, S_IWGRP, S_IXGRP, S_IROTH, S_IWOTH, S_IXOTH }; // flags which determine whether the user or group or others have a read, write, and execution permission
-    char perm[3] = { 'r', 'w', 'x' }; //permission array
+    int flags[9] = {S_IRUSR, S_IWUSR, S_IXUSR, S_IRGRP, S_IWGRP, S_IXGRP, S_IROTH, S_IWOTH, S_IXOTH}; // flags which determine whether the user or group or others have a read, write, and execution permission
+    char perm[3] = {'r', 'w', 'x'};                                                                   //permission array
 
     for (int i = 0; i < 9; i++) // this loop here prints out permissions for the given users
     {
@@ -149,55 +191,143 @@ void printLongListing(const char * file) // this function prints the long listed
     }
 
     printf(" ");
-    printf("1 "); // print others
-    printUserName(buf->st_uid); // print owner id
-    printf(" "); // print blank space
-    printGroupName(buf->st_gid); // print group id
-    printf(" %d %s", (int)buf->st_size, file); // print size
-    printf(" %s", ctime(&buf->st_mtime)); // print last modification date
-    printf(" %s", file); // print file name
+    printf("%d ", (int)buf->st_nlink);         // print others
+    printUserName(buf->st_uid);                // print owner id
+    printf(" ");                               // print blank space
+    printGroupName(buf->st_gid);               // print group id
+    printf(" %d ", (int)buf->st_size); // print size
+
+    char date[strlen(ctime(&buf->st_mtime)) + 1];
+    strcpy(date, ctime(&buf->st_mtime));
+    date[strlen(date) - 1] = '\0';
+
+    char day[5];
+    char day_num[3];
+    char year[5];
+    char hm[10];
+    
+
+    strncpy(day, date + 4, 3);
+    strncpy(day_num, date + 8, 2);
+    strncpy(year, date + 20, 4);
+    strncpy(hm, date + 11, 5);
+
+    day[4] = ' ';
+
+    printf(" %s %s %s %s ", day, day_num, year, hm); // print last modification date
 
     free(buf);
 }
 
-void traverseDir(const char * path) // this function goes through the given directory
+//void traverseDir(const char * path) // this function goes through the given directory
+//{
+//    struct dirent * dir_data = NULL;
+
+//    DIR * dir;
+//    dir = opendir(path);
+
+//    struct stat * buf = (struct stat *)malloc(sizeof (struct stat));
+
+//    memset(buf, 0, sizeof (struct stat));
+
+//    while((dir_data = readdir(dir)) != NULL) // read each file and directory inside a given directory
+//    {
+//        char dest[strlen(path) + strlen(dir_data->d_name) + 2];
+//        sprintf(dest, "%s/%s", path, dir_data->d_name); // string concatenation
+
+//        if (strcmp(dir_data->d_name, "..") != 0 && strcmp(dir_data->d_name, ".") != 0) // if directory doesnt match the parent directory go through it
+//        {
+//            if (stat(dest, buf) == -1) // error check
+//            {
+//                fprintf(stderr, "stat: %s: Permission denied\n", dest);
+//            }
+
+//            if (buf->st_mode & S_IFDIR) // if device is a directory
+//            {
+//                printf("%s\n", dest);
+//                traverseDir(dest); // go recursively
+//            }
+
+//            memset(buf, 0, sizeof (struct stat)); // clear all the data field inside a buffer
+//        }
+//    }
+
+//    free(buf); // deallocate memory
+//    closedir(dir); // close the directory
+//}
+
+void custom_print(struct file_list *fl, struct options *opt, bool is_first_layer)
 {
-    struct dirent * dir_data = NULL;
+    struct stat *buf = (struct stat *)malloc(sizeof(struct stat));
+    memset(buf, 0, sizeof(struct stat));
 
-    DIR * dir;
-    dir = opendir(path);
-
-    struct stat * buf = (struct stat *)malloc(sizeof (struct stat));
-
-    memset(buf, 0, sizeof (struct stat));
-
-    while((dir_data = readdir(dir)) != NULL) // read each file and directory inside a given directory
+    if (buf == NULL)
     {
-        char dest[strlen(path) + strlen(dir_data->d_name) + 2];
-        sprintf(dest, "%s/%s", path, dir_data->d_name); // string concatenation
+        ERR("\n Could not allocate memory on the heap");
+    }
 
-        if (strcmp(dir_data->d_name, "..") != 0 && strcmp(dir_data->d_name, ".") != 0) // if directory doesnt match the parent directory go through it
+    for (int i = 0; i < fl->size; i++)
+    {
+        char full_path[MAX_DIRECTORY_CHARS];
+
+        strcpy(full_path, fl->directory);
+        strcat(full_path, fl->flist[i]);
+
+        //printf("Full path is now %s\n\n", full_path);
+
+        if (stat(full_path, buf) == -1)
         {
-            if (stat(dest, buf) == -1) // error check
+            fprintf(stderr, "stat: %s: Permission denied\n", full_path);
+        }
+
+        if (!is_first_layer || !(buf->st_mode & S_IFDIR))
+        {
+            if (opt->opt & I_OPT)
             {
-                fprintf(stderr, "stat: %s: Permission denied\n", dest);
+                printIndexNum(full_path);
             }
 
-            if (buf->st_mode & S_IFDIR) // if device is a directory
+            if (opt->opt & L_OPT)
             {
-                printf("%s\n", dest);
-                traverseDir(dest); // go recursively
+                printLongListing(full_path);
             }
 
-            memset(buf, 0, sizeof (struct stat)); // clear all the data field inside a buffer
+            printf("%s", fl->flist[i]);
+
+            if ((opt->opt & R_OPT) || (opt->opt & L_OPT))
+            {
+                printf("\n");
+            }
+            else
+            {
+                printf(" ");
+            }
+        }
+
+        if ((opt->opt & R_OPT) == 0 && !is_first_layer)
+        {
+            continue;
+        }
+
+        if (buf->st_mode & S_IFDIR)
+        {
+            struct file_list subfl = readTheWholeDir(full_path);
+
+            custom_print(&subfl, opt, false);
+
+            for (int i = 0; i < subfl.size; i++)
+            {
+                free(subfl.flist[i]);
+            }
+
+            free(subfl.directory);
         }
     }
 
-    free(buf); // deallocate memory
-    closedir(dir); // close the directory
+    free(buf);
 }
 
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     if (argc == 1) // if no arguments are given just display the current directory content
     {
@@ -205,7 +335,7 @@ int main(int argc, char * argv[])
 
         for (int i = 0; i < fl.size; i++)
         {
-            printf("%s\n", fl.flist[i]); // print directory content
+            printf("%s ", fl.flist[i]); // print directory content
         }
 
         for (int i = 0; i < fl.size; i++)
@@ -214,94 +344,108 @@ int main(int argc, char * argv[])
         }
 
         free(fl.flist); // deallocate memory
+        free(fl.directory);
+
+        return 0;
     }
 
-    else if (argc >= 2) // invoke this code fragment if options are given
+    struct options *opt = (struct options *)malloc(sizeof(struct options));
+    struct file_list *fl = (struct file_list *)malloc(sizeof(struct file_list));
+
+    memset(fl, 0, sizeof(struct file_list));
+    memset(opt, 0, sizeof(struct file_list));
+
+    if (argc > 1) // invoke this code fragment if options are given
     {
-        for (UL i = 0; i < strlen(argv[1]); i++)
-        {            
-            if (argv[1][i] == 'i')
+        for (int i = 1; i < argc; i++)
+        {
+            if (argv[i][0] == '-')
             {
-                if (argc == 2)
+                for (UL j = 1; j < strlen(argv[i]); j++)
                 {
-                    struct file_list fl = readTheWholeDir("."); // print directory content using file indexing format
-
-                    for (int i = 0; i < fl.size; i++)
+                    if (argv[i][j] == 'i')
                     {
-                        printIndexNum(fl.flist[i]);
-                        printf("\n");
+                        opt->opt |= I_OPT;
                     }
-
-                    for (int i = 0; i < fl.size; i++)
+                    else if (argv[i][j] == 'l')
                     {
-                        free(fl.flist[i]); // deallocate memory
+                        opt->opt |= L_OPT;
                     }
-
-                    free(fl.flist); // deallocate memory
-
-                    continue;
-                }
-
-                for (int i = 0; i < (argc - 2); i++) // print directory content using file indexing format if file list is given
-                {
-                    printIndexNum(argv[2 + i]);
-                    printf("\n");
+                    else if (argv[i][j] == 'R')
+                    {
+                        opt->opt |= R_OPT;
+                    }
+                    else
+                    {
+                        fprintf(stderr, "Unknow option %c", argv[i][j]);
+                        exit(EXIT_FAILURE);
+                    }
                 }
             }
 
-            else if (argv[1][i] == 'l')
+            else
             {
-                if (argc == 2)
+                if (fl->size == 0)
                 {
-                    struct file_list fl = readTheWholeDir("."); // print directory content using long termed format
-
-                    for (int i = 0; i < fl.size; i++)
+                    if ((fl->flist = (char **)malloc(sizeof(char *))) == NULL)
                     {
-                        printLongListing(fl.flist[i]);
-                        printf("\n");
+                        ERR("\nCould not allocate memory on the heap");
                     }
 
-                    for (int i = 0; i < fl.size; i++) // deallocate memory
+                    if ((fl->flist[0] = (char *)malloc(strlen(argv[i]) + 1)) == NULL)
                     {
-                        free(fl.flist[i]);
+                        ERR("\nCould not allocate memory on the heap");
                     }
 
-                    free(fl.flist); // deallocate memory
+                    strcpy(fl->flist[0], argv[i]);
 
-                    continue;
+                    fl->size++;
                 }
 
-                for (int i = 0; i < (argc - 2); i++) // print directory content using long termed format if the file list is given
+                else
                 {
-                    printLongListing(argv[2 + i]);
-                    printf("\n");
+                    if ((fl->flist = (char **)realloc(fl->flist, sizeof(char *) * (fl->size + 1))) == NULL)
+                    {
+                        ERR("\nCould not reallocate memory on the heap");
+                    }
+
+                    if ((fl->flist[fl->size] = (char *)realloc(fl->flist[fl->size], strlen(argv[i]) + 1)) == NULL)
+                    {
+                        ERR("\nCould not reallocate memory on the heap");
+                    }
+
+                    strcpy(fl->flist[fl->size], argv[i]);
+
+                    fl->size++;
                 }
-            }
-
-            else if (argv[1][i] == 'R')
-            {
-                if (argc == 2)
-                {
-                    traverseDir("."); // display sub directories
-
-                    continue;
-                }
-
-                for (int i = 0; i < (argc - 2); i++)
-                {
-                    traverseDir(argv[2 + i]); // display sub directories if dirctory list is given
-                }
-            }
-
-            else if (argv[1][i] != '-')
-            {
-                char errMsg[20];
-                sprintf(errMsg, "Unknow option -%c", argv[1][i]);
-
-                ERR(errMsg);
             }
         }
     }
+
+    bool is_first_layer = fl->size > 0;
+
+    if (fl->size == 0)
+    {
+        *fl = readTheWholeDir("./"); // store the current directory content inside the file_list structure
+    }
+    else
+    {
+        fl->directory = (char *)malloc(1);
+        strcpy(fl->directory, "");
+    }
+
+    qsort(fl->flist, fl->size, sizeof(const char *), stringComparer);
+
+    custom_print(fl, opt, is_first_layer);
+
+    for (int i = 0; i < fl->size; i++)
+    {
+        free(fl->flist[i]);
+    }
+
+    free(fl->directory);
+
+    free(fl);
 
     return 0;
 }
