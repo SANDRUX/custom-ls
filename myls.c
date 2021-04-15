@@ -1,7 +1,3 @@
-
-You sent დღეს, 10:34-ზე
-date ar undoda ase rogorcaa
-You sent დღეს, 10:36-ზე
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
