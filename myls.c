@@ -19,11 +19,6 @@
 
 #define MAX_DIRECTORY_CHARS 1000
 
-static int stringComparer(const void *a, const void *b)
-{
-    return strcmp((const char *)a, (const char *)b);
-}
-
 typedef unsigned long UL;
 
 struct file_list
@@ -197,20 +192,7 @@ void printLongListing(const char *file) // this function prints the long listed 
     strcpy(date, ctime(&buf->st_mtime));
     date[strlen(date) - 1] = '\0';
 
-    char day[5];
-    char day_num[3];
-    char year[5];
-    char hm[10];
-    
-
-    strncpy(day, date + 4, 3);
-    strncpy(day_num, date + 8, 2);
-    strncpy(year, date + 20, 4);
-    strncpy(hm, date + 11, 5);
-
-    day[4] = ' ';
-
-    printf(" %s %s %s %s ", day, day_num, year, hm); // print last modification date
+    printf(" %s ", date); // print last modification date
 
     free(buf);
 }
@@ -273,7 +255,7 @@ void custom_print(struct file_list *fl, struct options *opt, bool is_first_layer
 
         if (stat(full_path, buf) == -1)
         {
-            fprintf(stderr, "stat: %s: Permission denied\n", full_path);
+            fprintf(stderr, "stat: %s: Permission denied or file does not exists!\n", full_path);
         }
 
         if (!is_first_layer || !(buf->st_mode & S_IFDIR))
@@ -328,6 +310,26 @@ int main(int argc, char *argv[])
     if (argc == 1) // if no arguments are given just display the current directory content
     {
         struct file_list fl = readTheWholeDir("."); // store the current directory content inside the file_list structure
+
+        char temp[30];
+
+        for (int i = 0; i < fl.size; i++)
+        {
+            for (int j = (i + 1); j < fl.size; j++)
+            {
+                if (strcmp(fl.flist[i], fl.flist[j]) > 0)
+                {
+                    strcpy(temp, fl.flist[i]);
+                    strcpy(fl.flist[i], fl.flist[j]);
+                    strcpy(fl.flist[j], temp);
+
+                    // printf("%s\n", fl.flist[i]);
+                    // printf("%s", fl.flist[j]);
+                }
+            }
+        }
+
+        // qsort(fl.flist, fl.size, sizeof(const char *), stringComparer);
 
         for (int i = 0; i < fl.size; i++)
         {
@@ -430,7 +432,22 @@ int main(int argc, char *argv[])
         strcpy(fl->directory, "");
     }
 
-    qsort(fl->flist, fl->size, sizeof(const char *), stringComparer);
+    // qsort(fl->flist, fl->size, sizeof(const char *), stringComparer);
+
+    char temp[30];
+
+    for (int i = 0; i < fl->size; i++)
+    {
+        for (int j = (i + 1); j < fl->size; j++)
+        {
+            if (strcmp(fl->flist[i], fl->flist[j]) > 0)
+            {
+                strcpy(temp, fl->flist[i]);
+                strcpy(fl->flist[i], fl->flist[j]);
+                strcpy(fl->flist[j], temp);
+            }
+        }
+    }
 
     custom_print(fl, opt, is_first_layer);
 
